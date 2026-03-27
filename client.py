@@ -53,7 +53,7 @@ def conectar():
             client.connect((HOST, PORT))
             print(f"[CLIENT] Conectado a {HOST}:{PORT}")
             return client
-        except (ConnectionError, OSError):
+        except (ConnectionError, OSError): #cuando no puedo conectarme
             print(f"[CLIENT] Sin servidor. Reintentando en {DELAY_REINTENTO}s...")
             time.sleep(DELAY_REINTENTO)
 
@@ -72,7 +72,7 @@ def run_client():
         hilo_envio.daemon = True # muere si el programa termina
         hilo_envio.start()
         # espera hasta que el hilo de recepción muera (señal de que el servidor cayó)
-        hilo_recepcion.join()
-        print(f"[CLIENT] Reconectando en {DELAY_REINTENTO}s...")
-        time.sleep(DELAY_REINTENTO)
+        hilo_recepcion.join()# espera a que el hilo muera y ejecuta lo de abajo
+        print(f"[CLIENT] Reconectando en {DELAY_REINTENTO}s...") #cuando ya estaba conectado y cayo
+        time.sleep(DELAY_REINTENTO) # vuelve a llamar a conectar()
 run_client()
