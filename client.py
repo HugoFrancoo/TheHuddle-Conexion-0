@@ -69,7 +69,7 @@ def run_client():
         hilo_recepcion.start()
         # hilo de envío: escucha input del usuario
         hilo_envio = threading.Thread(target=enviar_mensajes, args=(client, cerrar_evento))
-        hilo_envio.daemon = True # el programa sale aunque el hilo siga ejecutandose
+        hilo_envio.daemon = True # muere si el programa termina
         hilo_envio.start()
         # espera hasta que el hilo de recepción muera (señal de que el servidor cayó)
         hilo_recepcion.join()
