@@ -1,17 +1,17 @@
 import select # permite vigilar multiples sockets al mismo tiempo sin usar un hilo para cada uno
 import socket
 
-# ── configuración ──────────────────────────────────────────
+# configuración
 HOST = "127.0.0.1"
 PORT = 5050
 BUFFER = 1024
-# ── estado global ──────────────────────────────────────────
+# estado global 
 lista_clientes = []  # todos los sockets activos (incluye al server)
-# ── socket del servidor ────────────────────────────────────
+#  socket del servidor 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((HOST, PORT))
-# ── funciones ──────────────────────────────────────────────
+#  funciones 
 def desconectar(sock):
     # saca el socket de la lista y lo cierra limpiamente
     if sock in lista_clientes:
@@ -47,7 +47,7 @@ def manejar_cliente(sock):
     except (ConnectionError, OSError):          # desconexión abrupta
         desconectar(sock)
 
-# ── loop principal ─────────────────────────────────────────
+# loop principal 
 def run_server():
     server.listen()
     print(f"[SERVER] Escuchando en {HOST}:{PORT}...")

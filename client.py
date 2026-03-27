@@ -1,12 +1,12 @@
 import socket
 import threading
 import time
-# ── configuración ──────────────────────────────────────────
+# configuración
 HOST = "127.0.0.1" #ip-server
 PORT = 5050 #puerto-server
 BUFFER = 1024
 DELAY_REINTENTO = 3 #pausa el programa N segundos entre reintentos
-# ── funciones ──────────────────────────────────────────────
+# funciones 
 def recibir_mensajes(client, cerrar_evento):
     # escucha mensajes del servidor en un hilo separado
     while True:
@@ -16,16 +16,15 @@ def recibir_mensajes(client, cerrar_evento):
                 print("[CLIENT] Servidor desconectado.")
                 break
             
-            print(datos.decode("utf-8"))
-            
+            print(datos.decode("utf-8")) 
         except (ConnectionError, OSError):      # conexión caída abruptamente
             print("[CLIENT] Conexión perdida.")
             break
     # avisa al hilo de envío que la conexión murió e interrumpe el socket
     cerrar_evento.set() # activa el flag compartido
-    try:
-        client.shutdown(socket.SHUT_RDWR) # corta ambos lados del socket de forma inmediata e interrumpe cualquier operación bloqueada sobre él en otro hilo.
-        client.close()
+    try: # desconexion limpia
+        client.shutdown(socket.SHUT_RDWR) # corta la conexion de ambos lados del socket
+        client.close() #libera espacio recurso, cierra el socket
     except:
         pass
 
@@ -58,28 +57,22 @@ def conectar():
             print(f"[CLIENT] Sin servidor. Reintentando en {DELAY_REINTENTO}s...")
             time.sleep(DELAY_REINTENTO)
 
-# ── loop principal ─────────────────────────────────────────
+# loop principal 
 def run_client():
     while True:
         client = conectar()
-
         # evento compartido: se activa cuando la conexión muere
         cerrar_evento = threading.Event()
-
         # hilo de recepción: escucha mensajes del servidor
         hilo_recepcion = threading.Thread(target=recibir_mensajes, args=(client, cerrar_evento))
         hilo_recepcion.daemon = True
         hilo_recepcion.start()
-
         # hilo de envío: escucha input del usuario
         hilo_envio = threading.Thread(target=enviar_mensajes, args=(client, cerrar_evento))
-        hilo_envio.daemon = True
+        hilo_envio.daemon = True # el programa sale aunque el hilo siga ejecutandose
         hilo_envio.start()
-
         # espera hasta que el hilo de recepción muera (señal de que el servidor cayó)
         hilo_recepcion.join()
-
         print(f"[CLIENT] Reconectando en {DELAY_REINTENTO}s...")
         time.sleep(DELAY_REINTENTO)
-
 run_client()
