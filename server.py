@@ -1,116 +1,70 @@
-import select
+import select # permite vigilar multiples sockets al mismo tiempo sin usar un hilo para cada uno
 import socket
-# variables constantes
+
+# ── configuración ──────────────────────────────────────────
 HOST = "127.0.0.1"
 PORT = 5050
-BUFFER = 1024 #la capacidad en bytes que puede recibir 
-lista_clientes = []
+BUFFER = 1024
+# ── estado global ──────────────────────────────────────────
+lista_clientes = []  # todos los sockets activos (incluye al server)
+# ── socket del servidor ────────────────────────────────────
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind((HOST, PORT))
+# ── funciones ──────────────────────────────────────────────
+def desconectar(sock):
+    # saca el socket de la lista y lo cierra limpiamente
+    if sock in lista_clientes:
+        lista_clientes.remove(sock)
+    try:
+        sock.close()
+    except:
+        pass
+    print("[SERVER] Cliente desconectado")
 
-server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-server.bind((HOST,PORT))
+def broadcast(mensaje, origen):
+    # envía el mensaje a todos los clientes menos al que lo mandó
+    for cliente in lista_clientes:
+        if cliente != origen and cliente != server:
+            try:
+                cliente.send(mensaje.encode("utf-8"))
+            except:
+                desconectar(cliente)
 
+def manejar_cliente(sock):
+    # lee el mensaje del cliente y lo distribuye
+    try:
+        datos = sock.recv(BUFFER)
+
+        if not datos:                           # desconexión limpia (recv vacío)
+            desconectar(sock)
+            return # salgo de la funcion
+
+        mensaje = datos.decode("utf-8")
+        print(f"[SERVER] Mensaje recibido: {mensaje}")
+        broadcast(mensaje, origen=sock)
+
+    except (ConnectionError, OSError):          # desconexión abrupta
+        desconectar(sock)
+
+# ── loop principal ─────────────────────────────────────────
 def run_server():
-
     server.listen()
-
-    print(f"[SERVER]Servidor escuchando en {HOST}, {PORT}...")
+    print(f"[SERVER] Escuchando en {HOST}:{PORT}...")
 
     lista_clientes.append(server)
-    while True:
-        lectura_socket,_,_ = select.select(lista_clientes,[],[]) #investigar los corchetes
 
-        for socket in lectura_socket:
-            if socket == server:
+    while True:
+        # select() bloquea hasta que algún socket tenga actividad
+        legibles, _, _ = select.select(lista_clientes, [], []) # solo me importa los sockets quen tienen datos para leer
+
+        for sock in legibles:
+            if sock == server:
+                # conexión nueva entrante
                 conn, addr = server.accept()
                 lista_clientes.append(conn)
-                print(f"[SERVER] Nuevo cliente conectado {addr}")
-            else: #El cliente ya conectado mando datos
-                # manejar_mensaje(socket)
-                pass
-
-def manejar_clientes(socket):
-    try:
-        datos = socket.recv(BUFFER)
-
-        if not datos: # recv vacio
-            socket.close()
-            mensaje = mensaje.decode("utf-8")
-            print("[SERVER] Mensaje recibido",mensaje)
-            broadcast
-            
-    except(ConnectionError,OSError):
-
-
-
-
-
-
-                
-
-
-
-
-
-
-#   FUNCIÓN principal():
-#     server_sock = crear_socket(TCP)
-#     server_sock.opcion(SO_REUSEADDR = true)
-#     server_sock.bind(HOST, PORT)
-#     server_sock.listen(max_conexiones = 10)
-#     imprimir("Servidor escuchando en PORT")
-
-#     MIENTRAS true:
-#       # select() bloquea hasta que haya actividad en algún socket
-#       readable = select([server_sock] + lista_clientes)
-
-#       PARA cada sock EN readable:
-
-#         SI sock == server_sock:
-#           # Nuevo cliente quiere conectarse
-#           cliente_sock, direccion = server_sock.accept()
-#           lista_clientes.agregar(cliente_sock)
-#           imprimir("Nuevo cliente conectado:", direccion)
-
-#         SINO:
-#           # Un cliente ya conectado mandó datos
-#           manejar_mensaje(sock)
-
-#   ─────────────────────────────────────────
-#   FUNCIÓN manejar_mensaje(sock):
-#     INTENTAR:
-#       datos = sock.recv(BUFFER_SIZE)
-
-#       SI datos está vacío:
-#         # Cliente cerró conexión limpiamente
-#         desconectar(sock)
-#         RETORNAR
-
-#       mensaje = decodificar(datos)
-#       imprimir("[SERVIDOR] Mensaje recibido:", mensaje)
-#       broadcast(mensaje, origen = sock)
-
-#     EN CASO DE ERROR (ConnectionError, OSError):
-#       # Conexión rota de forma inesperada
-#       desconectar(sock)
-
-#   ─────────────────────────────────────────
-#   FUNCIÓN broadcast(mensaje, origen):
-#     PARA cada cliente EN lista_clientes:
-#       SI cliente != origen:
-#         INTENTAR:
-#           cliente.send(codificar(mensaje))
-#         EN CASO DE ERROR:
-#           # El cliente remoto ya no responde
-#           desconectar(cliente)
-
-#   ─────────────────────────────────────────
-#   FUNCIÓN desconectar(sock):
-#     SI sock EN lista_clientes:
-#       lista_clientes.eliminar(sock)
-#     INTENTAR:
-#       sock.close()
-#     IGNORAR errores al cerrar
-#     imprimir("Cliente desconectado")
-
-# FIN PROGRAMA
+                print(f"[SERVER] Nuevo cliente: {addr}")
+            else:
+                # mensaje de un cliente ya conectado
+                manejar_cliente(sock)
+run_server()

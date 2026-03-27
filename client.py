@@ -1,83 +1,85 @@
-# PROGRAMA cliente
+import socket
+import threading
+import time
+# ── configuración ──────────────────────────────────────────
+HOST = "127.0.0.1" #ip-server
+PORT = 5050 #puerto-server
+BUFFER = 1024
+DELAY_REINTENTO = 3 #pausa el programa N segundos entre reintentos
+# ── funciones ──────────────────────────────────────────────
+def recibir_mensajes(client, cerrar_evento):
+    # escucha mensajes del servidor en un hilo separado
+    while True:
+        try:
+            datos = client.recv(BUFFER)
+            if not datos:                       # servidor cerró la conexión
+                print("[CLIENT] Servidor desconectado.")
+                break
+            
+            print(datos.decode("utf-8"))
+            
+        except (ConnectionError, OSError):      # conexión caída abruptamente
+            print("[CLIENT] Conexión perdida.")
+            break
+    # avisa al hilo de envío que la conexión murió e interrumpe el socket
+    cerrar_evento.set() # activa el flag compartido
+    try:
+        client.shutdown(socket.SHUT_RDWR) # corta ambos lados del socket de forma inmediata e interrumpe cualquier operación bloqueada sobre él en otro hilo.
+        client.close()
+    except:
+        pass
 
-#   CONSTANTES:
-#     HOST = "127.0.0.1"      # IP del servidor
-#     PORT = 12345
-#     BUFFER_SIZE = 4096
-#     MAX_REINTENTOS = 3
-#     DELAY_REINTENTO = 2     # segundos entre reintentos
+def enviar_mensajes(client, cerrar_evento):
+    # lee input del usuario y lo manda al servidor
+    while True:
+        try:
+            texto = input()
 
-#   VARIABLES:
-#     sock = null
-#     hilo_recepcion = null
+            if not texto:
+                continue
 
-#   ─────────────────────────────────────────
-#   FUNCIÓN principal():
-#     SI NOT conectar_con_reintentos():
-#       imprimir("No se pudo conectar. Saliendo.")
-#       SALIR
+            if cerrar_evento.is_set():          # conexión ya muerta, no enviar
+                break
 
-#     # Lanzar hilo separado para recibir mensajes
-#     hilo_recepcion = Thread(función = recibir_mensajes)
-#     hilo_recepcion.daemon = true     # muere si el programa termina
-#     hilo_recepcion.iniciar()
+            client.send(texto.encode("utf-8"))
 
-#     # Hilo principal: leer input del usuario y enviar
-#     enviar_mensajes()
+        except (ConnectionError, OSError):
+            break
 
-#   ─────────────────────────────────────────
-#   FUNCIÓN conectar_con_reintentos():
-#     intentos = 0
-#     MIENTRAS intentos < MAX_REINTENTOS:
-#       INTENTAR:
-#         sock = crear_socket(TCP)
-#         sock.connect(HOST, PORT)
-#         imprimir("Conectado al servidor")
-#         RETORNAR true
-#       EN CASO DE ERROR:
-#         intentos += 1
-#         imprimir("Reintento", intentos, "de", MAX_REINTENTOS)
-#         esperar(DELAY_REINTENTO)
-#     RETORNAR false
+def conectar():
+    # intenta conectar al servidor, reintenta cada N segundos si falla
+    while True:
+        try:
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect((HOST, PORT))
+            print(f"[CLIENT] Conectado a {HOST}:{PORT}")
+            return client
+        except (ConnectionError, OSError):
+            print(f"[CLIENT] Sin servidor. Reintentando en {DELAY_REINTENTO}s...")
+            time.sleep(DELAY_REINTENTO)
 
-#   ─────────────────────────────────────────
-#   FUNCIÓN enviar_mensajes():
-#     # Corre en el hilo principal (controla stdin)
-#     MIENTRAS true:
-#       INTENTAR:
-#         texto = leer_stdin()         # bloquea esperando input
+# ── loop principal ─────────────────────────────────────────
+def run_client():
+    while True:
+        client = conectar()
 
-#         SI texto == "" O texto == null:
-#           CONTINUAR
+        # evento compartido: se activa cuando la conexión muere
+        cerrar_evento = threading.Event()
 
-#         sock.send(codificar(texto))
+        # hilo de recepción: escucha mensajes del servidor
+        hilo_recepcion = threading.Thread(target=recibir_mensajes, args=(client, cerrar_evento))
+        hilo_recepcion.daemon = True
+        hilo_recepcion.start()
 
-#       EN CASO DE ERROR (ConnectionError, OSError):
-#         imprimir("Error al enviar. Conexión perdida.")
-#         ROMPER
+        # hilo de envío: escucha input del usuario
+        hilo_envio = threading.Thread(target=enviar_mensajes, args=(client, cerrar_evento))
+        hilo_envio.daemon = True
+        hilo_envio.start()
 
-#     sock.close()
-#     imprimir("Desconectado del servidor.")
+        # espera hasta que el hilo de recepción muera (señal de que el servidor cayó)
+        hilo_recepcion.join()
 
-#   ─────────────────────────────────────────
-#   FUNCIÓN recibir_mensajes():
-#     # Corre en un hilo separado (no bloquea al usuario)
-#     MIENTRAS true:
-#       INTENTAR:
-#         datos = sock.recv(BUFFER_SIZE)
+        print(f"[CLIENT] Reconectando en {DELAY_REINTENTO}s...")
+        time.sleep(DELAY_REINTENTO)
 
-#         SI datos está vacío:
-#           # Servidor cerró la conexión
-#           imprimir("Servidor cerró la conexión.")
-#           ROMPER
-
-#         mensaje = decodificar(datos)
-#         imprimir(mensaje)            # muestra en stdout
-
-#       EN CASO DE ERROR (ConnectionError, OSError):
-#         imprimir("Conexión con el servidor perdida.")
-#         ROMPER
-
-#     sock.close()
-
-# FIN PROGRAMA
+run_client()
